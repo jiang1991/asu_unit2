@@ -1,74 +1,49 @@
-# This is a sample Python script.
-import sys
+import math
 
-import boto3
-import logging
-import os
-from botocore.exceptions import ClientError
+import grequests
 import time
-import threading
-from boto3.s3.transfer import TransferConfig
+import os
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+url = 'http://3.35.16.246:5000/upload'
+url_m = 'http://3.35.16.246:5000/'
 
-s3 = boto3.resource('s3')
-
-region = 'ap-northeast-2'
-key = 'jiang'
-key_filename = 'key_jiang.pem'
-s3_bucket = 'jiang-s3-test'
-
-file_dir = f'D:\\workspace\\py\\asu_unit2\\imagenet-100\\'
+file_dir = f'D:\\python\\asu_unit2\\imagenet-100'
 
 
-# list s3
-def list_s3():
-    print('Buckets List:\n\t', *[b.name for b in s3.buckets.all()], sep="\n\t")
+# file = {'myfile': open('./imagenet-100/test_1.JPEG', 'rb')}
 
+# 识别
+def diagnose(file):
+    file_upload_path = os.path.join(file_dir, file)
+    print(f'开始识别 {file}')
+    file_upload = {'myfile': open(file_upload_path, 'rb')}
 
-# create s3
-def create_s3(bucket_name):
-    try:
-        print(f'\nCreating new bucket: {bucket_name}, wait until exists')
-        bucket = s3.create_bucket(
-            Bucket=bucket_name,
-            CreateBucketConfiguration={
-                'LocationConstraint': region
-            }
-        )
-    except ClientError as e:
-        print(e)
-        sys.exit('Exiting the script because bucket creation failed.')
+    # s = int(round(time.time() * 1000))  # request开始时间戳
+    r = grequests.post(url, files=file_upload)
+    # r = requests.get(url_m)
+    # e = int(round(time.time() * 1000))  # request结束时间戳
 
-    bucket.wait_until_exists()
-    print(f'\nCreated new bucket: {bucket_name}.')
-    list_s3()
-    return bucket
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
-
-
-# s3 upload file
-def upload_s3(dir, object_name=None):
-    # Upload the file
-    list_file = os.listdir(dir)
-
-    for f in list_file:
-        print(os.path.join(dir, f))
-        s3.Bucket(s3_bucket).upload_file(
-            os.path.join(dir, f),
-            f
-        )
-        print(f'File: {f} uploaded to S3 bucket')
+    # print(f'识别结果为: {r[0].text}\r\n', f'{file}请求时长: {e - s}ms')
+    return r
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    create_s3(s3_bucket)
-    upload_s3(file_dir)
+
+    list_file = os.listdir(file_dir)
+    # 一次最多并行10张图片
+
+    r_times = math.ceil(len(list_file)/10)  # 请求次数
+    print(len(list_file), r_times)
+
+    for i in range(r_times):
+        req_list = []
+        i_max = min(10 * (i + 1) - 1, len(list_file))
+        for j in (10*i, i_max):
+            req_list.append(diagnose(list_file[j]))
+        # print(req_list)
+        res_list = grequests.map(req_list)
+        for res in res_list:
+            print(res.text)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
